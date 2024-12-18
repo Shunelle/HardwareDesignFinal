@@ -1,6 +1,6 @@
 module game_controller(
     input wire clk,
-    input wire clk_div26,
+    input wire clk_div27,
     input wire rst,
     input wire start_op,
     input wire [8:0] box,
@@ -54,7 +54,7 @@ always @(*) begin
 end
 
 // Fire state update
-always @(posedge clk_div26 or posedge rst) begin
+always @(posedge clk_div27 or posedge rst) begin
     if (rst) begin
         fire_state <= 9'b100100100;  // 初始值
     end else if (game_state == INIT) begin
@@ -71,37 +71,57 @@ end
 reg [3:0] hit_count;  // 用來計算踩到幾個火焰
 integer i;
 
-always @(box, fire_state, game_state) begin
-    next_life = life;
-    case (game_state)
-        INIT: begin
-            next_life = 3;
+reg [8:0] prev_fire_state;
+reg [8:0] prev_box;
+reg check_collision;
+
+// 偵測 fire_state 和 box 的變化
+always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        prev_fire_state <= 9'b0;
+        prev_box <= 9'b0;
+        check_collision <= 0;
+    end else begin
+        prev_fire_state <= fire_state;
+        prev_box <= box;
+        // 當 fire_state 或 box 改變時，設置檢查標誌
+        if (fire_state != prev_fire_state || box != prev_box) begin
+            check_collision <= 1;
+        end else begin
+            check_collision <= 0;
         end
-        PLAY: begin
-            hit_count = 0;
-            for (i = 0; i < 9; i = i + 1) begin
-                if (box[i] & fire_state[i]) begin
-                    hit_count = hit_count + 1;
-                end
-            end
-            
-            if (hit_count > 0) begin
-                if (hit_count >= life) begin
-                    next_life = 0;  // 如果踩到的火焰數量大於等於剩餘生命值
-                end else begin
-                    next_life = life - hit_count;  // 每個火焰扣一點生命
-                end
-            end
-        end
-    endcase
+    end
 end
 
-// Life control
-always @(posedge clk_div26 or posedge rst) begin
+// 生命值計算
+always @(posedge clk or posedge rst) begin
     if (rst) begin
         life <= 3;
+        hit_count <= 0;
     end else begin
-        life <= next_life;
+        case (game_state)
+            INIT: begin
+                life <= 3;
+            end
+            PLAY: begin
+                if (check_collision) begin  // 只在需要時計算碰撞
+                    hit_count <= 0;
+                    for (i = 0; i < 9; i = i + 1) begin
+                        if (box[i] & fire_state[i]) begin
+                            hit_count <= hit_count + 1;
+                        end
+                    end
+                    
+                    if (hit_count > 0) begin
+                        if (hit_count >= life) begin
+                            life <= 0;
+                        end else begin
+                            life <= life - hit_count;
+                        end
+                    end
+                end
+            end
+        endcase
     end
 end
 
