@@ -3,22 +3,24 @@ module final_project(
     input wire clk,
     input wire rst,
     input wire start,
+    input wire super,
     input wire [8:0] box,
     output reg [3:0] vgaRed,
     output reg [3:0] vgaGreen,
     output reg [3:0] vgaBlue,
     output wire hsync,
-    output wire vsync
+    output wire vsync,
+    output wire [3:0] score
 );
 
 // Internal signals
-wire clk_25MHz, clk_95Hz, clk_div26;
+wire clk_25MHz, clk_95Hz, clk_div28, clk_div26;
 wire start_db, start_op;
 wire valid;
 wire [9:0] h_cnt, v_cnt;
 wire [1:0] game_state;
-wire [7:0] score;
-wire [8:0] fire_state;
+// wire [3:0] score;
+wire [8:0] fire_state, gold_state;
 wire [11:0] pixel_color;
 wire [1:0] life;
 
@@ -31,6 +33,11 @@ clock_divider #(.n(2)) m2(
 clock_divider #(.n(20)) m20(
     .clk(clk),
     .clk_div(clk_95Hz)
+);
+
+clock_divider #(.n(28)) m28(
+    .clk(clk),
+    .clk_div(clk_div28)
 );
 
 clock_divider #(.n(26)) m26(
@@ -65,13 +72,17 @@ vga_controller vga_inst(
 // Game controller
 game_controller game_ctrl(
     .clk(clk_25MHz),
+    .clk_div28(clk_div28),
     .clk_div26(clk_div26),
     .rst(rst),
-    .start_op(start_op),
+    .start(start_op),
+    .super(super),
     .box(box),
     .game_state(game_state),
     .score(score),
     .fire_state(fire_state),
+    .gold_state(gold_state),
+    .warning_state(warning_state),
     .life(life)
 );
 
@@ -83,9 +94,11 @@ display_controller display_ctrl(
     .h_cnt(h_cnt),
     .v_cnt(v_cnt),
     .game_state(game_state),
-    .score(score),
     .fire_state(fire_state),
+    .gold_state(gold_state),
+    .warning_state(warning_state),
     .life(life),
+    .score(score),
     .box(box),
     .pixel_color(pixel_color)
 );
