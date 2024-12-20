@@ -11,6 +11,7 @@ module display_controller(
     input wire [8:0] box,
     input wire [1:0] life,
     input wire [3:0] score,
+    input wire win,
     output reg [11:0] pixel_color
 );
 
@@ -58,6 +59,16 @@ parameter SCORE_START_Y = 60;
 parameter SCORE_SPACING = 15;
 parameter SCORE_BORDER = 1;
 
+//results display parameters
+parameter WIN_ORIG_HEIGHT = 40;
+parameter WIN_ORIG_WIDTH = 80;
+parameter LOSS_ORIG_HEIGHT = 40;
+parameter LOSS_ORIG_WIDTH = 85;
+parameter WIN_HEIGHT = WIN_ORIG_HEIGHT * 2;    // 放大後高度
+parameter WIN_WIDTH = WIN_ORIG_WIDTH * 2;      // 放大後寬度
+parameter LOSS_HEIGHT = LOSS_ORIG_HEIGHT * 2;  // 放大後高度
+parameter LOSS_WIDTH = LOSS_ORIG_WIDTH * 2;    // 放大後寬度
+
 // 定義透明色
 parameter TRANSPARENT_COLOR = 12'h000;
 
@@ -74,8 +85,11 @@ reg [11:0] addr;
 wire [11:0] fire_data [0:5];
 wire [11:0] gold_data [0:5];
 wire [11:0] ct_data;
+wire [11:0] win_data;
+wire [11:0] loss_data;
 
-// Memory instances
+
+// background img
 blk_mem_gen_bg bg(.clka(clk), .wea(1'b0), .addra(bg_addr), .dina(12'b0), .douta(bg_data));
 
 // fire 動畫
@@ -94,8 +108,12 @@ blk_mem_gen_gold3 gold3(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .dou
 blk_mem_gen_gold4 gold4(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .douta(gold_data[4]));
 blk_mem_gen_gold5 gold5(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .douta(gold_data[5]));
 
-//CT 圖片
+//CT img
 blk_mem_gen_CT ct(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .douta(ct_data));
+
+//win loss img
+blk_mem_gen_win win(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .douta(win_data));
+blk_mem_gen_loss loss(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .douta(loss_data));
 
 // 背景地址計算
 always @* begin
@@ -124,6 +142,19 @@ wire [9:0] gold_x = (rel_x % BOX_SIZE) - gold_start_x;
 wire [9:0] gold_y = (rel_y % BOX_SIZE) - gold_start_y;
 wire is_in_gold = (gold_x < GOLD_SIZE && gold_y < GOLD_SIZE && 
                   rel_x % BOX_SIZE >= gold_start_x && rel_y % BOX_SIZE >= gold_start_y);
+
+//result圖片位置計算
+wire [9:0] win_start_x = (H_DISPLAY - WIN_WIDTH)/2;
+wire [9:0] win_start_y = (V_DISPLAY - WIN_HEIGHT)/2;
+wire [9:0] loss_start_x = (H_DISPLAY - LOSS_WIDTH)/2;
+wire [9:0] loss_start_y = (V_DISPLAY - LOSS_HEIGHT)/2;
+wire [9:0] result_x = win ? (h_cnt - win_start_x) : (h_cnt - loss_start_x);
+wire [9:0] result_y = win ? (v_cnt - win_start_y) : (v_cnt - loss_start_y);
+wire is_in_result = win ? 
+    (result_x < WIN_WIDTH && result_y < WIN_HEIGHT &&
+     h_cnt >= win_start_x && v_cnt >= win_start_y) :
+    (result_x < LOSS_WIDTH && result_y < LOSS_HEIGHT &&
+     h_cnt >= loss_start_x && v_cnt >= loss_start_y);
 
 // UI 元素檢查
 wire is_in_grid = (h_cnt >= GRID_START_X && h_cnt < GRID_START_X + GRID_SIZE &&
@@ -183,8 +214,14 @@ end
 
 // Memory address calculation
 always @* begin
-    if (box[box_index] && is_in_img) begin
-        addr = img_y * IMG_SIZE + img_x;  // CT圖片
+    if (game_state == FINISH && is_in_result) begin
+        if (win) begin
+            addr = ((result_y >> 1) * WIN_ORIG_WIDTH) + (result_x >> 1);
+        end else begin
+            addr = ((result_y >> 1) * LOSS_ORIG_WIDTH) + (result_x >> 1);
+        end
+    end else if (box[box_index] && is_in_gold) begin
+        addr = ((gold_y >> 1) * IMG_SIZE) + (gold_x >> 1);   // CT圖片
     end else if (gold_state[box_index] && is_in_gold) begin
         addr = ((gold_y >> 1) * IMG_SIZE) + (gold_x >> 1);  // Gold圖片
     end else if (fire_state[box_index] && is_in_img) begin
@@ -202,8 +239,6 @@ always @* begin
         case (game_state)
             INIT: begin
                 pixel_color = bg_data;
-                if (is_border)
-                    pixel_color = 12'hFFF;  // 白色邊框
             end
             PLAY: begin
                 // 預設顯示背景
@@ -237,7 +272,7 @@ always @* begin
                     pixel_color = bg_data;
                     
                     // 然後依序疊加其他圖層（如果不是透明的話）
-                    if (box[box_index] && is_in_img) begin
+                    if (box[box_index] && is_in_gold) begin
                         if (ct_data != TRANSPARENT_COLOR)
                             pixel_color = ct_data;
                     end
@@ -253,9 +288,16 @@ always @* begin
             end
             
             FINISH: begin
-                pixel_color = bg_data;  // 顯示背景
-                if (is_border)
-                    pixel_color = 12'hFFF;
+                pixel_color = bg_data;  // 先顯示背景
+                if (is_in_result) begin
+                    if (win) begin
+                        if (win_data != TRANSPARENT_COLOR)
+                            pixel_color = win_data;
+                    end else begin
+                        if (loss_data != TRANSPARENT_COLOR)
+                            pixel_color = loss_data;
+                    end
+                end
             end
             
             default: pixel_color = bg_data;

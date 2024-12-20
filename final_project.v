@@ -25,6 +25,8 @@ wire [8:0] fire_state, gold_state;
 wire [11:0] pixel_color;
 wire [1:0] life;
 
+wire win;
+
 // Clock generation
 clock_divider #(.n(2)) m2(
     .clk(clk),
@@ -85,7 +87,8 @@ game_controller game_ctrl(
     .fire_state(fire_state),
     .gold_state(gold_state),
     .warning_state(warning_state),
-    .life(life)
+    .life(life),
+    .win(win)
 );
 
 // Display controller
@@ -101,6 +104,7 @@ display_controller display_ctrl(
     .warning_state(warning_state),
     .life(life),
     .score(score),
+    .win(win),
     .box(box),
     .pixel_color(pixel_color)
 );
