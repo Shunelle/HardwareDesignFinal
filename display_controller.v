@@ -7,7 +7,7 @@ module display_controller(
     input wire [1:0] game_state,
     input wire [8:0] fire_state,
     input wire [8:0] gold_state,
-    input wire [8:0] warning_state,
+    input wire [8:0] next_fire_pattern,
     input wire [8:0] box,
     input wire [1:0] life,
     input wire [3:0] score,
@@ -41,6 +41,18 @@ parameter BORDER_WIDTH = 2;
 parameter GRID_START_X = (H_DISPLAY - GRID_SIZE)/2;
 parameter GRID_START_Y = (V_DISPLAY - GRID_SIZE)/2;
 
+// 小九宮格參數
+parameter MINI_GRID_SIZE = 90;
+parameter MINI_BOX_SIZE = MINI_GRID_SIZE/3;
+parameter MINI_GRID_START_X = 10;  // 左下角位置
+parameter MINI_GRID_START_Y = V_DISPLAY - MINI_GRID_SIZE - 30;  // 左下角位置
+
+//CT image parameters
+parameter CT_ORIG_WIDTH = 80;    // CT原始寬度
+parameter CT_ORIG_HEIGHT = 60;   // CT原始高度 
+parameter CT_WIDTH = 120;         // CT顯示寬度
+parameter CT_HEIGHT = 90;       // CT顯示高度
+
 // Fire image parameters
 parameter IMG_SIZE = 60;
 parameter GOLD_SIZE = 120;  // 2倍大的金幣
@@ -70,18 +82,21 @@ parameter LOSS_HEIGHT = LOSS_ORIG_HEIGHT * 2;  // 放大後高度
 parameter LOSS_WIDTH = LOSS_ORIG_WIDTH * 2;    // 放大後寬度
 
 // 定義透明色
-parameter TRANSPARENT_COLOR = 12'h000;
+parameter TRANSPARENT_BLACK = 12'h000;
+parameter TRANSPARENT_WHITE = 12'hFFF;
 
 // Animation signals
 reg [3:0] fire_counter;
 reg [19:0] frame_counter;
 
 // Background memory signals
-reg [16:0] bg_addr;
 wire [11:0] bg_data;
 
 // Memory signals
 reg [11:0] addr;
+reg [12:0] ct_addr;
+reg [16:0] bg_addr;
+
 wire [11:0] fire_data [0:5];
 wire [11:0] gold_data [0:5];
 wire [11:0] ct_data;
@@ -109,7 +124,7 @@ blk_mem_gen_gold4 gold4(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .dou
 blk_mem_gen_gold5 gold5(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .douta(gold_data[5]));
 
 //CT img
-blk_mem_gen_CT ct(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .douta(ct_data));
+blk_mem_gen_6 ct(.clka(clk), .wea(1'b0), .addra(ct_addr), .dina(12'b0), .douta(ct_data));
 
 //win loss img
 blk_mem_gen_win win(.clka(clk), .wea(1'b0), .addra(addr), .dina(12'b0), .douta(win_data));
@@ -127,6 +142,27 @@ wire [1:0] grid_x = rel_x / BOX_SIZE;
 wire [1:0] grid_y = rel_y / BOX_SIZE;
 wire [3:0] box_index = grid_y * 3 + grid_x;
 
+// Mini grid position calculations
+wire [9:0] mini_rel_x = h_cnt - MINI_GRID_START_X;
+wire [9:0] mini_rel_y = v_cnt - MINI_GRID_START_Y;
+wire [1:0] mini_grid_x = mini_rel_x / MINI_BOX_SIZE;
+wire [1:0] mini_grid_y = mini_rel_y / MINI_BOX_SIZE;
+wire [3:0] mini_box_index = mini_grid_y * 3 + mini_grid_x;
+wire is_in_mini_grid = (h_cnt >= MINI_GRID_START_X && h_cnt < MINI_GRID_START_X + MINI_GRID_SIZE &&
+                       v_cnt >= MINI_GRID_START_Y && v_cnt < MINI_GRID_START_Y + MINI_GRID_SIZE);
+
+// Mini grid border check
+wire is_mini_border = is_in_mini_grid && (
+    (mini_rel_x < BORDER_WIDTH) || 
+    (mini_rel_x >= (MINI_GRID_SIZE - BORDER_WIDTH)) ||
+    (mini_rel_y < BORDER_WIDTH) || 
+    (mini_rel_y >= (MINI_GRID_SIZE - BORDER_WIDTH)) ||
+    (mini_rel_x % MINI_BOX_SIZE < BORDER_WIDTH) ||
+    (mini_rel_y % MINI_BOX_SIZE < BORDER_WIDTH) ||
+    ((mini_rel_x + 1) % MINI_BOX_SIZE == 0) ||
+    ((mini_rel_y + 1) % MINI_BOX_SIZE == 0)
+);
+
 // 一般圖片位置計算
 wire [9:0] img_start_x = (BOX_SIZE - IMG_SIZE)/2;
 wire [9:0] img_start_y = (BOX_SIZE - IMG_SIZE)/2;
@@ -142,6 +178,14 @@ wire [9:0] gold_x = (rel_x % BOX_SIZE) - gold_start_x;
 wire [9:0] gold_y = (rel_y % BOX_SIZE) - gold_start_y;
 wire is_in_gold = (gold_x < GOLD_SIZE && gold_y < GOLD_SIZE && 
                   rel_x % BOX_SIZE >= gold_start_x && rel_y % BOX_SIZE >= gold_start_y);
+
+//ct圖片位置計算
+wire [9:0] ct_start_x = (BOX_SIZE - CT_WIDTH)/2;
+wire [9:0] ct_start_y = (BOX_SIZE - CT_HEIGHT)/2;
+wire [9:0] ct_x = (rel_x % BOX_SIZE) - ct_start_x;
+wire [9:0] ct_y = (rel_y % BOX_SIZE) - ct_start_y;
+wire is_in_ct = (ct_x < CT_WIDTH && ct_y < CT_HEIGHT && 
+                rel_x % BOX_SIZE >= ct_start_x && rel_y % BOX_SIZE >= ct_start_y);
 
 //result圖片位置計算
 wire [9:0] win_start_x = (H_DISPLAY - WIN_WIDTH)/2;
@@ -215,18 +259,24 @@ end
 // Memory address calculation
 always @* begin
     if (game_state == FINISH && is_in_result) begin
+        ct_addr = 0;  // 不使用時設為 0
         if (win) begin
             addr = ((result_y >> 1) * WIN_ORIG_WIDTH) + (result_x >> 1);
         end else begin
             addr = ((result_y >> 1) * LOSS_ORIG_WIDTH) + (result_x >> 1);
         end
-    end else if (box[box_index] && is_in_gold) begin
-        addr = ((gold_y >> 1) * IMG_SIZE) + (gold_x >> 1);   // CT圖片
+    end else if (box[box_index] && is_in_ct) begin
+        ct_addr = ((ct_y * CT_ORIG_HEIGHT / CT_HEIGHT) * CT_ORIG_WIDTH) + 
+                 (ct_x * CT_ORIG_WIDTH / CT_WIDTH);   // CT圖片
+        addr = 0;  // 不使用時設為 0
     end else if (gold_state[box_index] && is_in_gold) begin
+        ct_addr = 0;  // 不使用時設為 0
         addr = ((gold_y >> 1) * IMG_SIZE) + (gold_x >> 1);  // Gold圖片
     end else if (fire_state[box_index] && is_in_img) begin
+        ct_addr = 0;  // 不使用時設為 0
         addr = img_y * IMG_SIZE + img_x;  // 火焰圖片
     end else begin
+        ct_addr = 0;  // 不使用時設為 0
         addr = 0;
     end
 end
@@ -245,7 +295,15 @@ always @* begin
                 pixel_color = bg_data;
                 
                 // UI 元素
-                if (is_in_life) begin
+                if (is_in_mini_grid) begin  // 加入這段
+                    if (is_mini_border)
+                        pixel_color = 12'hFFF;  // 白色邊框
+                    else if (next_fire_pattern[mini_box_index])
+                        pixel_color = 12'hF40;  // 橘紅色
+                    else
+                        pixel_color = bg_data;
+                end
+                else if (is_in_life) begin
                     if (is_life_border)
                         pixel_color = 12'hFFF;
                     else if (is_active_life)
@@ -262,26 +320,23 @@ always @* begin
                         pixel_color = bg_data;
                 end
                 else if (is_border) begin
-                    if (warning_state[box_index])
-                        pixel_color = (fire_counter[1]) ? 12'hDD5 : 12'hFFF;
-                    else
-                        pixel_color = 12'hFFF;
+                    pixel_color = 12'hFFF;
                 end
                 else if (is_in_grid) begin
                     // 先顯示背景
                     pixel_color = bg_data;
                     
                     // 然後依序疊加其他圖層（如果不是透明的話）
-                    if (box[box_index] && is_in_gold) begin
-                        if (ct_data != TRANSPARENT_COLOR)
+                    if (box[box_index] && is_in_ct) begin
+                        if (ct_data != TRANSPARENT_WHITE)
                             pixel_color = ct_data;
                     end
                     else if (gold_state[box_index] && is_in_gold && !box[box_index]) begin
-                        if (gold_data[fire_counter] != TRANSPARENT_COLOR)
+                        if (gold_data[fire_counter] != TRANSPARENT_BLACK)
                             pixel_color = gold_data[fire_counter];
                     end
                     else if (fire_state[box_index] && is_in_img) begin
-                        if (fire_data[fire_counter] != TRANSPARENT_COLOR)
+                        if (fire_data[fire_counter] != TRANSPARENT_BLACK)
                             pixel_color = fire_data[fire_counter];
                     end
                 end
@@ -291,10 +346,10 @@ always @* begin
                 pixel_color = bg_data;  // 先顯示背景
                 if (is_in_result) begin
                     if (win) begin
-                        if (win_data != TRANSPARENT_COLOR)
+                        if (win_data != TRANSPARENT_BLACK)
                             pixel_color = win_data;
                     end else begin
-                        if (loss_data != TRANSPARENT_COLOR)
+                        if (loss_data != TRANSPARENT_BLACK)
                             pixel_color = loss_data;
                     end
                 end

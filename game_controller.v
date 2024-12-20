@@ -10,7 +10,7 @@ module game_controller(
     output reg [3:0] score,
     output reg [8:0] fire_state,
     output reg [8:0] gold_state,
-    output reg [8:0] warning_state,
+    output reg [8:0] next_fire_pattern,
     output reg [1:0] life,
     output reg win
 );
@@ -27,7 +27,7 @@ parameter SCORE_MAX = 5;
 // 內部信號
 reg [1:0] next_game_state;
 reg [1:0] next_life;
-reg [8:0] fire_pattern, next_fire_pattern, prev_fire_pattern, prev_gold_state, gold_pattern;
+reg [8:0] fire_pattern, prev_fire_pattern, prev_gold_state, gold_pattern;
 reg [3:0] ones_count;
 
 //warning
@@ -122,34 +122,6 @@ always @(*) begin
     end
 end
 
-// Fire update timing control
-always @(posedge clk_div26 or posedge rst) begin
-    if (rst) begin
-        warning_flag <= 0;
-        warning_counter <= 0;
-    end else if (game_state == INIT) begin
-        warning_flag <= 0;
-        warning_counter <= 0;
-    end else if (game_state == PLAY) begin
-        if (warning_counter < 3) warning_counter <= warning_counter + 1;
-        else warning_counter <= 0;
-        if(warning_counter < 2) begin
-            warning_flag <= 0;
-        end
-        else begin
-            warning_flag <= 1;  // 開始預警
-        end 
-    end
-end
-
-// Warning state control
-always @(*) begin
-    if (warning_flag && game_state == PLAY) begin
-        warning_state = next_fire_pattern;  // 只在預警時間顯示
-    end else begin
-        warning_state = 9'b0;
-    end
-end
 
 // Gold state update
 always @(*) begin

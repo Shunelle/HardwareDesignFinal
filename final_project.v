@@ -10,7 +10,7 @@ module final_project(
     output reg [3:0] vgaBlue,
     output wire hsync,
     output wire vsync,
-    output wire [8:0] warning_state
+    output wire [8:0] box_out
 );
 
 // Internal signals
@@ -21,7 +21,7 @@ wire [9:0] h_cnt, v_cnt;
 wire [1:0] game_state;
 wire [3:0] score;
 wire [8:0] fire_state, gold_state;
-// wire [8:0] warning_state;
+wire [8:0] next_fire_pattern;
 wire [11:0] pixel_color;
 wire [1:0] life;
 
@@ -86,7 +86,7 @@ game_controller game_ctrl(
     .score(score),
     .fire_state(fire_state),
     .gold_state(gold_state),
-    .warning_state(warning_state),
+    .next_fire_pattern(next_fire_pattern),
     .life(life),
     .win(win)
 );
@@ -101,13 +101,15 @@ display_controller display_ctrl(
     .game_state(game_state),
     .fire_state(fire_state),
     .gold_state(gold_state),
-    .warning_state(warning_state),
+    .next_fire_pattern(next_fire_pattern),
     .life(life),
     .score(score),
     .win(win),
     .box(box),
     .pixel_color(pixel_color)
 );
+
+assign box_out = box; 
 
 
 // VGA output assignment
