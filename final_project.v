@@ -10,7 +10,7 @@ module final_project(
     output reg [3:0] vgaBlue,
     output wire hsync,
     output wire vsync,
-    output wire [3:0] score
+    output wire [8:0] warning_state
 );
 
 // Internal signals
@@ -19,8 +19,9 @@ wire start_db, start_op;
 wire valid;
 wire [9:0] h_cnt, v_cnt;
 wire [1:0] game_state;
-// wire [3:0] score;
+wire [3:0] score;
 wire [8:0] fire_state, gold_state;
+// wire [8:0] warning_state;
 wire [11:0] pixel_color;
 wire [1:0] life;
 
@@ -70,6 +71,7 @@ vga_controller vga_inst(
 );
 
 // Game controller
+
 game_controller game_ctrl(
     .clk(clk_25MHz),
     .clk_div28(clk_div28),
