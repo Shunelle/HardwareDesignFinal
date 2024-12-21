@@ -9,6 +9,7 @@ module display_controller(
     input wire [8:0] gold_state,
     input wire [8:0] next_fire_pattern,
     input wire [8:0] box,
+    input wire [8:0] hit_bitmap,
     input wire [1:0] life,
     input wire [3:0] score,
     input wire win,
@@ -52,6 +53,9 @@ parameter CT_ORIG_WIDTH = 80;    // CT原始寬度
 parameter CT_ORIG_HEIGHT = 60;   // CT原始高度 
 parameter CT_WIDTH = 120;         // CT顯示寬度
 parameter CT_HEIGHT = 90;       // CT顯示高度
+
+parameter CT_CENTER_X = (H_DISPLAY - CT_WIDTH)/2;
+parameter CT_CENTER_Y = (V_DISPLAY - CT_HEIGHT)/2;
 
 // Fire image parameters
 parameter IMG_SIZE = 60;
@@ -186,6 +190,22 @@ wire [9:0] ct_x = (rel_x % BOX_SIZE) - ct_start_x;
 wire [9:0] ct_y = (rel_y % BOX_SIZE) - ct_start_y;
 wire is_in_ct = (ct_x < CT_WIDTH && ct_y < CT_HEIGHT && 
                 rel_x % BOX_SIZE >= ct_start_x && rel_y % BOX_SIZE >= ct_start_y);
+//init ct
+wire [9:0] init_ct_x = h_cnt - CT_CENTER_X;
+wire [9:0] init_ct_y = v_cnt - CT_CENTER_Y;
+wire is_in_init_ct = (init_ct_x < CT_WIDTH && init_ct_y < CT_HEIGHT &&
+                     h_cnt >= CT_CENTER_X && v_cnt >= CT_CENTER_Y);
+
+// CT掃把火焰位置計算（在ct圖片位置計算後面加入）
+wire [9:0] broom_fire_start_x = ct_start_x - 10;  // 從 CT 的左邊開始
+wire [9:0] broom_fire_start_y = ct_start_y + CT_HEIGHT - IMG_SIZE - 15;  // 從 CT 底部往上 IMG_SIZE 的高度，再往上5個單位
+wire [9:0] broom_fire_x = (rel_x % BOX_SIZE) - broom_fire_start_x;
+wire [9:0] broom_fire_y = (rel_y % BOX_SIZE) - broom_fire_start_y;
+wire is_in_broom_fire = (broom_fire_x < IMG_SIZE && 
+                        broom_fire_y >= 0 && broom_fire_y < IMG_SIZE &&
+                        rel_x % BOX_SIZE >= broom_fire_start_x && 
+                        rel_y % BOX_SIZE >= broom_fire_start_y &&
+                        box[box_index]);
 
 //result圖片位置計算
 wire [9:0] win_start_x = (H_DISPLAY - WIN_WIDTH)/2;
@@ -247,6 +267,7 @@ always @(posedge clk or posedge rst) begin
         fire_counter <= 0;
         frame_counter <= 0;
     end else if (frame_counter == 20'hFFFFF) begin
+        // 一般的火
         if (fire_counter == 5)
             fire_counter <= 0;
         else
@@ -256,27 +277,38 @@ always @(posedge clk or posedge rst) begin
         frame_counter <= frame_counter + 1;
 end
 
+
 // Memory address calculation
 always @* begin
-    if (game_state == FINISH && is_in_result) begin
-        ct_addr = 0;  // 不使用時設為 0
+    if (game_state == INIT && is_in_init_ct) begin
+        ct_addr = ((init_ct_y * CT_ORIG_HEIGHT / CT_HEIGHT) * CT_ORIG_WIDTH) + 
+                 (init_ct_x * CT_ORIG_WIDTH / CT_WIDTH);
+        addr = 0;
+    end else if (game_state == FINISH && is_in_result) begin
+        ct_addr = 0;  
         if (win) begin
             addr = ((result_y >> 1) * WIN_ORIG_WIDTH) + (result_x >> 1);
         end else begin
             addr = ((result_y >> 1) * LOSS_ORIG_WIDTH) + (result_x >> 1);
         end
     end else if (box[box_index] && is_in_ct) begin
-        ct_addr = ((ct_y * CT_ORIG_HEIGHT / CT_HEIGHT) * CT_ORIG_WIDTH) + 
-                 (ct_x * CT_ORIG_WIDTH / CT_WIDTH);   // CT圖片
-        addr = 0;  // 不使用時設為 0
+        if (is_in_broom_fire && hit_bitmap[box_index]) begin
+            ct_addr = ((ct_y * CT_ORIG_HEIGHT / CT_HEIGHT) * CT_ORIG_WIDTH) + 
+                     (ct_x * CT_ORIG_WIDTH / CT_WIDTH);   // 保持顯示 CT
+            addr = broom_fire_y * IMG_SIZE + broom_fire_x;  // 同時計算火焰的地址
+        end else begin
+            ct_addr = ((ct_y * CT_ORIG_HEIGHT / CT_HEIGHT) * CT_ORIG_WIDTH) + 
+                     (ct_x * CT_ORIG_WIDTH / CT_WIDTH);   
+            addr = 0;
+        end
     end else if (gold_state[box_index] && is_in_gold) begin
-        ct_addr = 0;  // 不使用時設為 0
-        addr = ((gold_y >> 1) * IMG_SIZE) + (gold_x >> 1);  // Gold圖片
+        ct_addr = 0;  
+        addr = ((gold_y >> 1) * IMG_SIZE) + (gold_x >> 1); 
     end else if (fire_state[box_index] && is_in_img) begin
-        ct_addr = 0;  // 不使用時設為 0
-        addr = img_y * IMG_SIZE + img_x;  // 火焰圖片
+        ct_addr = 0;  
+        addr = img_y * IMG_SIZE + img_x;  
     end else begin
-        ct_addr = 0;  // 不使用時設為 0
+        ct_addr = 0;  
         addr = 0;
     end
 end
@@ -289,6 +321,10 @@ always @* begin
         case (game_state)
             INIT: begin
                 pixel_color = bg_data;
+                if (is_in_init_ct) begin  // 顯示中間的 CT
+                    if (ct_data != TRANSPARENT_WHITE)
+                        pixel_color = ct_data;
+                end
             end
             PLAY: begin
                 // 預設顯示背景
@@ -328,8 +364,14 @@ always @* begin
                     
                     // 然後依序疊加其他圖層（如果不是透明的話）
                     if (box[box_index] && is_in_ct) begin
-                        if (ct_data != TRANSPARENT_WHITE)
+                        if (is_in_broom_fire && hit_bitmap[box_index]) begin  // 先檢查是否要顯示火焰
+                            if (fire_data[fire_counter] != TRANSPARENT_BLACK)
+                                pixel_color = fire_data[fire_counter];
+                            else if (ct_data != TRANSPARENT_WHITE)  // 如果火焰是透明的，才顯示 CT
+                                pixel_color = ct_data;
+                        end else if (ct_data != TRANSPARENT_WHITE) begin  // 如果不是火焰區域，就正常顯示 CT
                             pixel_color = ct_data;
+                        end
                     end
                     else if (gold_state[box_index] && is_in_gold && !box[box_index]) begin
                         if (gold_data[fire_counter] != TRANSPARENT_BLACK)

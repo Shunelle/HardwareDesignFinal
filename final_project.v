@@ -10,19 +10,18 @@ module final_project(
     output reg [3:0] vgaBlue,
     output wire hsync,
     output wire vsync,
-    output wire [8:0] box_out,
-    output wire start_op
+    output wire [8:0] box_out
 );
 
 // Internal signals
 wire clk_25MHz, clk_95Hz, clk_div28;
-wire start_db;
+wire start_db, start_op;
 wire valid;
 wire [9:0] h_cnt, v_cnt;
 wire [1:0] game_state;
 wire [3:0] score;
 wire [8:0] fire_state, gold_state;
-wire [8:0] next_fire_pattern;
+wire [8:0] next_fire_pattern, hit_bitmap;
 wire [11:0] pixel_color;
 wire [1:0] life;
 
@@ -73,6 +72,7 @@ game_controller game_ctrl(
     .fire_state(fire_state),
     .gold_state(gold_state),
     .next_fire_pattern(next_fire_pattern),
+    .hit_bitmap(hit_bitmap),
     .life(life),
     .win(win)
 );
@@ -88,10 +88,11 @@ display_controller display_ctrl(
     .fire_state(fire_state),
     .gold_state(gold_state),
     .next_fire_pattern(next_fire_pattern),
+    .box(box),
+    .hit_bitmap(hit_bitmap),
     .life(life),
     .score(score),
     .win(win),
-    .box(box),
     .pixel_color(pixel_color)
 );
 

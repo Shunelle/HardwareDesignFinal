@@ -10,6 +10,7 @@ module game_controller(
     output reg [8:0] fire_state,
     output reg [8:0] gold_state,
     output reg [8:0] next_fire_pattern,
+    output reg [8:0] hit_bitmap,
     output reg [1:0] life,
     output reg win
 );
@@ -44,7 +45,7 @@ reg [3:0] random_select;    // 用於選擇空格
 reg [3:0] hit_count;  // 用來計算踩到幾個火焰
 integer i;
 
-reg [8:0] prev_box, hit_bitmap;
+reg [8:0] prev_box;
 reg check_collision, catch, fire_update;
 
 // FSM - state register
