@@ -1,7 +1,6 @@
 module game_controller(
     input wire clk,
     input wire clk_div28,
-    input wire clk_div26,
     input wire rst,
     input wire start,
     input wire super,

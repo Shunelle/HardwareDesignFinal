@@ -10,12 +10,13 @@ module final_project(
     output reg [3:0] vgaBlue,
     output wire hsync,
     output wire vsync,
-    output wire [8:0] box_out
+    output wire [8:0] box_out,
+    output wire start_op
 );
 
 // Internal signals
-wire clk_25MHz, clk_95Hz, clk_div28, clk_div26;
-wire start_db, start_op;
+wire clk_25MHz, clk_95Hz, clk_div28;
+wire start_db;
 wire valid;
 wire [9:0] h_cnt, v_cnt;
 wire [1:0] game_state;
@@ -43,23 +44,9 @@ clock_divider #(.n(28)) m28(
     .clk_div(clk_div28)
 );
 
-clock_divider #(.n(26)) m26(
-    .clk(clk),
-    .clk_div(clk_div26)
-);
-
 // Button debounce & one pulse
-debounce debounce_start(
-    .clk(clk_95Hz),
-    .pb(start),
-    .pb_debounced(start_db)
-);
-
-one_pulse one_pulse_start(
-    .clk(clk_95Hz),
-    .pb_in(start_db),
-    .pb_out(start_op)
-);
+debounce debounce_start(.clk(clk_95Hz), .pb(start), .pb_debounced(start_db));
+one_pulse one_pulse_start(.clk(clk_95Hz), .pb_in(start_db), .pb_out(start_op));
 
 // VGA controller
 vga_controller vga_inst(
@@ -75,9 +62,8 @@ vga_controller vga_inst(
 // Game controller
 
 game_controller game_ctrl(
-    .clk(clk_25MHz),
+    .clk(clk_95Hz),
     .clk_div28(clk_div28),
-    .clk_div26(clk_div26),
     .rst(rst),
     .start(start_op),
     .super(super),
