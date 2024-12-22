@@ -11,7 +11,7 @@ module game_controller(
     output reg [8:0] gold_state,
     output reg [8:0] next_fire_pattern,
     output reg [8:0] hit_bitmap,
-    output reg [1:0] life,
+    output reg [2:0] life,
     output reg win
 );
 
@@ -21,8 +21,8 @@ localparam PLAY = 2'b01;
 localparam FINISH = 2'b10;
 
 // life & score
-parameter LIFE_MAX = 3;
-parameter SCORE_MAX = 5;
+parameter LIFE_MAX = 5;
+parameter SCORE_MAX = 3;
 
 // 內部信號
 reg [1:0] next_game_state;
@@ -197,13 +197,13 @@ end
 // 生命值計算
 always @(posedge clk or posedge rst) begin
     if (rst) begin
-        life <= 3;
+        life <= LIFE_MAX;
         hit_count <= 0;
         hit_bitmap <= 9'b0;
     end else begin
         case (game_state)
             INIT: begin
-                life <= 3;
+                life <= LIFE_MAX;
                 hit_bitmap <= 9'b0;
             end
             PLAY: begin

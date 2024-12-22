@@ -10,8 +10,13 @@ module final_project(
     output reg [3:0] vgaBlue,
     output wire hsync,
     output wire vsync,
-    output wire [8:0] box_out
+    output wire [8:0] box_out,
+    output reg [3:0] music //music[0]:INIT ; music[1]:PLAY ; music[2]:WIN ; music[3]:LOSS
 );
+
+localparam INIT = 2'b00;
+localparam PLAY = 2'b01;
+localparam FINISH = 2'b10;
 
 // Internal signals
 wire clk_25MHz, clk_95Hz, clk_div28;
@@ -23,7 +28,7 @@ wire [3:0] score;
 wire [8:0] fire_state, gold_state;
 wire [8:0] next_fire_pattern, hit_bitmap;
 wire [11:0] pixel_color;
-wire [1:0] life;
+wire [2:0] life;
 
 wire win;
 
@@ -98,6 +103,13 @@ display_controller display_ctrl(
 
 assign box_out = box; 
 
+always @(*) begin
+    case(game_state) 
+        INIT: music = 4'b0001;
+        PLAY: music = 4'b0010;
+        FINISH: music = win? 4'b0100 : 4'b1000;
+    endcase
+end
 
 // VGA output assignment
 always @(*) begin

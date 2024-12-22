@@ -10,7 +10,7 @@ module display_controller(
     input wire [8:0] next_fire_pattern,
     input wire [8:0] box,
     input wire [8:0] hit_bitmap,
-    input wire [1:0] life,
+    input wire [2:0] life,
     input wire [3:0] score,
     input wire win,
     output reg [11:0] pixel_color
@@ -22,8 +22,8 @@ localparam PLAY = 2'b01;
 localparam FINISH = 2'b10;
 
 // life & score
-parameter LIFE_MAX = 3;
-parameter SCORE_MAX = 5;
+parameter LIFE_MAX = 5;
+parameter SCORE_MAX = 3;
 
 // VGA parameters
 parameter H_DISPLAY = 640;
