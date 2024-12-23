@@ -79,10 +79,10 @@ always @(*) begin
     endcase
 end
 
-// Fire state update
+// Fire pattern update
 always @(posedge clk_div28 or posedge rst) begin
     if(rst) begin
-        fire_pattern <= 9'b100110110;
+        fire_pattern <= 9'b100110010;
     end
     else begin
         fire_pattern <= next_fire_pattern;
@@ -92,7 +92,7 @@ end
 always @(*) begin
     case (game_state)
         INIT: begin
-            next_fire_pattern = 9'b100110110;
+            next_fire_pattern = 9'b100110010;
         end
         PLAY: begin
             next_fire_pattern <= {
@@ -108,7 +108,7 @@ always @(*) begin
             };
         end
         default: begin
-            next_fire_pattern = 9'b100110110;
+            next_fire_pattern = 9'b100110010;
         end
     endcase
 end
@@ -137,11 +137,11 @@ always @(posedge clk_div28 or posedge rst) begin
     if (rst) begin
         gold_pattern <= 9'b0;
         gold_counter <= 0;
-        random_pos <= 9'b100010000;
+        random_pos <= 9'b100010010;
     end else if (game_state == INIT) begin
         gold_pattern <= 9'b0;
         gold_counter <= 0;
-        random_pos <= 9'b100010000;
+        random_pos <= 9'b100010010;
     end else if (game_state == PLAY) begin
         if (gold_pattern == 9'b0) begin  // 當前沒有 gold
             gold_counter <= gold_counter + 1;
