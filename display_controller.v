@@ -236,7 +236,7 @@ wire is_border = is_in_grid && (
 );
 
 // Life checks
-wire [1:0] life_index = (h_cnt - LIFE_START_X) / LIFE_SPACING;
+wire [2:0] life_index = (h_cnt - LIFE_START_X) / LIFE_SPACING;
 wire [9:0] life_local_x = (h_cnt - LIFE_START_X) % LIFE_SPACING;
 wire [9:0] life_local_y = v_cnt - LIFE_START_Y;
 wire is_life_border = (life_local_x < LIFE_BORDER) || 
