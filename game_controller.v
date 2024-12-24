@@ -47,6 +47,7 @@ integer i;
 
 reg [8:0] prev_box;
 reg check_collision, catch, fire_update;
+reg [3:0] fire_count;
 
 // FSM - state register
 always @(posedge clk or posedge rst) begin
@@ -82,7 +83,7 @@ end
 // Fire pattern update
 always @(posedge clk_div28 or posedge rst) begin
     if(rst) begin
-        fire_pattern <= 9'b100110010;
+        fire_pattern <= 9'b101000100;
     end
     else begin
         fire_pattern <= next_fire_pattern;
@@ -90,33 +91,44 @@ always @(posedge clk_div28 or posedge rst) begin
 end
 
 always @(*) begin
-    case (game_state)
-        INIT: begin
-            next_fire_pattern = 9'b100110010;
-        end
-        PLAY: begin
-            next_fire_pattern <= {
-                fire_pattern[0],                                // [8]
-                fire_pattern[8],                               // [7]
-                fire_pattern[0] ^ fire_pattern[7],         // [6]
-                fire_pattern[0] ^ fire_pattern[6],         // [5]
-                fire_pattern[5],                               // [4]
-                fire_pattern[0] ^ fire_pattern[4],         // [3]
-                fire_pattern[3],                               // [2]
-                fire_pattern[2],                               // [1]
-                fire_pattern[1]                                // [0]
-            };
-        end
-        default: begin
-            next_fire_pattern = 9'b100110010;
-        end
-    endcase
+   // Count number of 1s in current pattern
+   fire_count = fire_pattern[0] + fire_pattern[1] + fire_pattern[2] + 
+                fire_pattern[3] + fire_pattern[4] + fire_pattern[5] + 
+                fire_pattern[6] + fire_pattern[7] + fire_pattern[8];
+                
+   case (game_state)
+       INIT: begin
+           next_fire_pattern = 9'b101000100;
+       end
+       PLAY: begin
+           // Calculate next pattern
+           next_fire_pattern = {
+               fire_pattern[0],                          
+               fire_pattern[8],                          
+               fire_pattern[0] ^ fire_pattern[7],    
+               fire_pattern[0] ^ fire_pattern[6],    
+               fire_pattern[5],                          
+               fire_pattern[0] ^ fire_pattern[4],    
+               fire_pattern[3],                          
+               fire_pattern[0] ^ fire_pattern[2],                          
+               fire_pattern[1]                           
+           };
+           
+           // If too many fires, clear some
+           if (fire_count > 4) begin
+               next_fire_pattern = next_fire_pattern & 9'b110011000; // Keep only 4 fires
+           end
+       end
+       default: begin
+           next_fire_pattern = 9'b101000100;
+       end
+   endcase
 end
 
 // Fire state update
 always @(*) begin
     if (game_state == INIT) begin
-        fire_state = 9'b100110110;
+        fire_state = 9'b101000100;
     end else if (game_state == PLAY) begin
         fire_state = fire_pattern & ~hit_bitmap;
     end
@@ -137,15 +149,15 @@ always @(posedge clk_div28 or posedge rst) begin
     if (rst) begin
         gold_pattern <= 9'b0;
         gold_counter <= 0;
-        random_pos <= 9'b100010010;
+        random_pos <= 9'b000010000;
     end else if (game_state == INIT) begin
         gold_pattern <= 9'b0;
         gold_counter <= 0;
-        random_pos <= 9'b100010010;
+        random_pos <= 9'b000010000;
     end else if (game_state == PLAY) begin
         if (gold_pattern == 9'b0) begin  // 當前沒有 gold
             gold_counter <= gold_counter + 1;
-            if (gold_counter >= 2) begin  // 調整這個值可以控制出現頻率
+            if (gold_counter >= 1) begin  // 調整這個值可以控制出現頻率
                 gold_counter <= 0;
                 // 更新隨機位置
                 random_pos <= random_pos >> 1;
@@ -155,15 +167,15 @@ always @(posedge clk_div28 or posedge rst) begin
                 random_pos[3] <= random_pos[0] ^ random_pos[4];
                              
                 // 在沒有火的地方放置 gold
-                if (random_pos[0] && !fire_state[0]) gold_pattern[0] <= 1;
-                else if (random_pos[1] && !fire_state[1]) gold_pattern[1] <= 1;
-                else if (random_pos[2] && !fire_state[2]) gold_pattern[2] <= 1;
-                else if (random_pos[3] && !fire_state[3]) gold_pattern[3] <= 1;
-                else if (random_pos[4] && !fire_state[4]) gold_pattern[4] <= 1;
-                else if (random_pos[5] && !fire_state[5]) gold_pattern[5] <= 1;
-                else if (random_pos[6] && !fire_state[6]) gold_pattern[6] <= 1;
-                else if (random_pos[7] && !fire_state[7]) gold_pattern[7] <= 1;
-                else if (random_pos[8] && !fire_state[8]) gold_pattern[8] <= 1;
+                if (random_pos[0] && !fire_pattern[0]) gold_pattern[0] <= 1;
+                else if (random_pos[1] && !fire_pattern[1]) gold_pattern[1] <= 1;
+                else if (random_pos[2] && !fire_pattern[2]) gold_pattern[2] <= 1;
+                else if (random_pos[3] && !fire_pattern[3]) gold_pattern[3] <= 1;
+                else if (random_pos[4] && !fire_pattern[4]) gold_pattern[4] <= 1;
+                else if (random_pos[5] && !fire_pattern[5]) gold_pattern[5] <= 1;
+                else if (random_pos[6] && !fire_pattern[6]) gold_pattern[6] <= 1;
+                else if (random_pos[7] && !fire_pattern[7]) gold_pattern[7] <= 1;
+                else if (random_pos[8] && !fire_pattern[8]) gold_pattern[8] <= 1;
             end
         end else begin  // 有 gold 時，跟著火焰更新的節奏一起更新
             gold_counter <= 0;
@@ -211,7 +223,7 @@ always @(posedge clk or posedge rst) begin
                 if (check_collision && !super) begin  // 只在需要時計算碰撞
                     hit_count <= 0;
                     for (i = 0; i < 9; i = i + 1) begin
-                        if (box[i] & fire_state[i] & ~gold_state[i]) begin
+                        if (box[i] & ~gold_state[i] & fire_state[i]) begin
                             hit_count <= hit_count + 1;
                             hit_bitmap[i] <= 1;
                         end
